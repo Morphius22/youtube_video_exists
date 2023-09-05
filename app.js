@@ -1,7 +1,9 @@
 const mongoose = require("mongoose");
-require("dotenv").config();
 const Videos = require("./models/videos");
 const nodemailer = require("nodemailer");
+require("dotenv").config();
+
+const badVideos = [];
 
 //connect to mongoDB
 mongoose.set("strictQuery", false);
@@ -10,8 +12,6 @@ async function main() {
   await mongoose.connect(process.env.mongoDB);
   console.log("connected to Mongo");
 }
-
-main().catch((err) => console.log(err));
 
 async function getVideoIds() {
   const videoIds = await Videos.find({});
@@ -39,8 +39,9 @@ async function checkVideoStatus(videoId, apiKey) {
         { videoId: videoId.videoId },
         { $set: { status: "No" } }
       );
-      console.log("here is the videoid for email", videoId.videoId);
-      sendEmail(videoId.videoId);
+      badVideos.push(videoId);
+      console.log("this is the bad videos array", badVideos);
+      determineEmailSend(badVideos, videoId);
     }
   } catch (error) {
     console.error("Error fetching video details:", error);
@@ -48,6 +49,7 @@ async function checkVideoStatus(videoId, apiKey) {
 }
 
 async function checkAllVideos() {
+  await main();
   const videoIds = await getVideoIds();
   for (const videoId of videoIds) {
     await checkVideoStatus(videoId, process.env.apiKey);
@@ -71,7 +73,7 @@ async function sendEmail(videoId) {
     from: process.env.username,
     to: process.env.username,
     subject: "Content - Youtube Video Down",
-    text: `A youtube video in our content is not working. It has a video id of ${videoId}`,
+    text: `A youtube video in our content is not working. It has a video id of ${badVideos}`,
   };
 
   // Send the email
@@ -82,4 +84,11 @@ async function sendEmail(videoId) {
     console.error("Error sending email:", error);
   }
 }
+
+async function determineEmailSend(badVideos, videoId) {
+  if (badVideos.length > 0) {
+    sendEmail(videoId.videoId);
+  }
+}
+
 checkAllVideos();
